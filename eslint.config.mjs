@@ -11,10 +11,17 @@ export default defineConfig(
   tseslint.configs.stylistic,
   {
     plugins: {
-      '@stylistic': stylistic
+      '@stylistic': stylistic,
     },
     rules: {
-      '@stylistic/semi': 'error',
-    }
-  }
+      '@stylistic/semi': ['error', 'always'],
+      '@stylistic/quotes': ['error', 'single', { avoidEscape: true }],
+      '@stylistic/no-trailing-spaces': ['error'],
+      '@stylistic/comma-dangle': ['error', 'always-multiline'],
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+      }],
+    },
+  },
 );
