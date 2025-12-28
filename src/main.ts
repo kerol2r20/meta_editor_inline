@@ -1,4 +1,10 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, MarkdownRenderChild } from 'obsidian';
+import type { MarkdownPostProcessorContext } from 'obsidian';
+import type { Transform } from 'sucrase';
+import * as React from 'react';
+import * as ReactDOM from 'react-dom';
+import * as ReactDOMClient from 'react-dom/client';
+import { transform } from 'sucrase';
 
 // Remember to rename these classes and interfaces!
 
@@ -9,6 +15,77 @@ interface MyPluginSettings {
 const DEFAULT_SETTINGS: MyPluginSettings = {
     mySetting: 'default',
 };
+
+const SYSTEM_MODULES: Record<string, unknown> = {
+    'react': React,
+    'react-dom': ReactDOM,
+};
+
+type AllowedLanguageType = 'js' | 'jsx' | 'ts' | 'tsx';
+
+class ReactWidget extends MarkdownRenderChild {
+    source: string;
+    containerEl: HTMLElement;
+    ctx: MarkdownPostProcessorContext;
+    root: ReturnType<typeof ReactDOMClient.createRoot> | null = null;
+    language: AllowedLanguageType;
+
+    constructor(source: string, containerEl: HTMLElement, ctx: MarkdownPostProcessorContext, language: AllowedLanguageType) {
+        super(containerEl);
+        this.source = source;
+        this.containerEl = containerEl;
+        this.ctx = ctx;
+        this.language = language;
+    }
+
+    onload(): void {
+        this.renderReact();
+    }
+
+    onunload(): void {
+        if (this.root) {
+            this.root.unmount();
+            this.root = null;
+        }
+    }
+
+    renderReact() {
+        const langTransform: Transform[] = [];
+
+        if (this.language === 'jsx' || this.language === 'tsx') {
+            langTransform.push('jsx');
+        }
+
+        if (this.language === 'ts' || this.language === 'tsx') {
+            langTransform.push('typescript');
+        }
+
+        const { code } = transform(this.source, {
+            transforms: [...langTransform, 'imports'],
+            jsxPragma: 'React.createElement',
+            jsxFragmentPragma: 'React.Fragment',
+        });
+
+        const customRequire = (moduleName: string) => {
+            if (moduleName in SYSTEM_MODULES) {
+                return SYSTEM_MODULES[moduleName];
+            }
+            throw new Error(`Module ${moduleName} not found`);
+        };
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const customExports: any = {};
+
+        const run = new Function('require', 'exports', 'React', code);
+        run(customRequire, customExports, React);
+
+        if (this.language === 'jsx' || this.language === 'tsx') {
+            const container = this.containerEl.createDiv();
+            this.root = ReactDOMClient.createRoot(container);
+            this.root.render(React.createElement(customExports.default));
+        }
+    }
+}
 
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
@@ -76,6 +153,37 @@ export default class MyPlugin extends Plugin {
 
         // When registering intervals, this function will automatically clear the interval when the plugin is disabled.
         // this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+
+        this.registerMarkdownCodeBlockProcessor('reactjs', async (source, el, ctx) => {
+            const widget = new ReactWidget(source, el, ctx, 'js');
+            ctx.addChild(widget);
+        });
+
+        this.registerMarkdownCodeBlockProcessor('reactts', async (source, el, ctx) => {
+            const widget = new ReactWidget(source, el, ctx, 'ts');
+            ctx.addChild(widget);
+        });
+
+        this.registerMarkdownCodeBlockProcessor('reactjsx', async (source, el, ctx) => {
+            const widget = new ReactWidget(source, el, ctx, 'jsx');
+            ctx.addChild(widget);
+        });
+
+        this.registerMarkdownCodeBlockProcessor('reacttsx', async (source, el, ctx) => {
+            const widget = new ReactWidget(source, el, ctx, 'tsx');
+            ctx.addChild(widget);
+        });
+
+        this.register(this.registerCodeblockHighlighting());
+    }
+
+    registerCodeblockHighlighting(): () => void {
+        window.CodeMirror.defineMode('reactjsx', (config) => window.CodeMirror.getMode(config, 'jsx'));
+
+        // Return function is executed on unload
+        return () => {
+            window.CodeMirror.defineMode('reactjsx', (config) => window.CodeMirror.getMode(config, 'null'));
+        };
     }
 
     onunload() {
