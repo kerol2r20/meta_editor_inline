@@ -8,12 +8,12 @@ import { transform } from 'sucrase';
 
 // Remember to rename these classes and interfaces!
 
-interface MyPluginSettings {
-    mySetting: string;
+interface ReactRenderPluginSettings {
+    modulePath: string;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-    mySetting: 'default',
+const DEFAULT_SETTINGS: ReactRenderPluginSettings = {
+    modulePath: '',
 };
 
 const SYSTEM_MODULES: Record<string, unknown> = {
@@ -87,8 +87,8 @@ class ReactWidget extends MarkdownRenderChild {
     }
 }
 
-export default class MyPlugin extends Plugin {
-    settings: MyPluginSettings;
+export default class ReactRenderPlugin extends Plugin {
+    settings: ReactRenderPluginSettings;
 
     async onload() {
         await this.loadSettings();
@@ -143,7 +143,7 @@ export default class MyPlugin extends Plugin {
         });
 
         // This adds a settings tab so the user can configure various aspects of the plugin
-        this.addSettingTab(new SampleSettingTab(this.app, this));
+        this.addSettingTab(new ReactRenderSettingTab(this.app, this));
 
         // If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
         // Using this function will automatically remove the event listener when this plugin is disabled.
@@ -215,10 +215,10 @@ class SampleModal extends Modal {
     }
 }
 
-class SampleSettingTab extends PluginSettingTab {
-    plugin: MyPlugin;
+class ReactRenderSettingTab extends PluginSettingTab {
+    plugin: ReactRenderPlugin;
 
-    constructor(app: App, plugin: MyPlugin) {
+    constructor(app: App, plugin: ReactRenderPlugin) {
         super(app, plugin);
         this.plugin = plugin;
     }
@@ -229,13 +229,13 @@ class SampleSettingTab extends PluginSettingTab {
         containerEl.empty();
 
         new Setting(containerEl)
-            .setName('Setting #1')
-            .setDesc('It\'s a secret')
+            .setName('Module Path')
+            .setDesc('Path to the React component module')
             .addText(text => text
-                .setPlaceholder('Enter your secret')
-                .setValue(this.plugin.settings.mySetting)
+                .setPlaceholder('Enter module path')
+                .setValue(this.plugin.settings.modulePath)
                 .onChange(async (value) => {
-                    this.plugin.settings.mySetting = value;
+                    this.plugin.settings.modulePath = value;
                     await this.plugin.saveSettings();
                 }));
     }
