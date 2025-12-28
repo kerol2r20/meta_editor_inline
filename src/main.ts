@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, MarkdownRenderChild } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, MarkdownRenderChild, AbstractInputSuggest, TFolder } from 'obsidian';
 import type { MarkdownPostProcessorContext } from 'obsidian';
 import type { Transform } from 'sucrase';
 import * as React from 'react';
@@ -22,6 +22,33 @@ const SYSTEM_MODULES: Record<string, unknown> = {
 };
 
 type AllowedLanguageType = 'js' | 'jsx' | 'ts' | 'tsx';
+
+class FolderSuggest extends AbstractInputSuggest<TFolder> {
+    textInputEl: HTMLInputElement;
+
+    constructor(app: App, textInputEl: HTMLInputElement) {
+        super(app, textInputEl);
+        this.textInputEl = textInputEl;
+    }
+
+    getSuggestions(query: string): TFolder[] {
+        const folders = this.app.vault
+            .getAllLoadedFiles()
+            .filter(file => file instanceof TFolder)
+            .filter(file => file.path.toLowerCase().includes(query.toLowerCase())) as TFolder[];
+        return folders;
+    }
+
+    renderSuggestion(folder: TFolder, el: HTMLElement): void {
+        el.setText(folder.path === '/' ? 'Vault root (/)' : folder.path);
+    }
+
+    selectSuggestion(folder: TFolder): void {
+        this.textInputEl.value = folder.path;
+        this.textInputEl.trigger('input');
+        this.close();
+    }
+}
 
 class ReactWidget extends MarkdownRenderChild {
     source: string;
@@ -231,12 +258,15 @@ class ReactRenderSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName('Module Path')
             .setDesc('Path to the React component module')
-            .addText(text => text
-                .setPlaceholder('Enter module path')
-                .setValue(this.plugin.settings.modulePath)
-                .onChange(async (value) => {
-                    this.plugin.settings.modulePath = value;
-                    await this.plugin.saveSettings();
-                }));
+            .addText(text => {
+                text
+                    .setPlaceholder('Enter module path')
+                    .setValue(this.plugin.settings.modulePath)
+                    .onChange(async (value) => {
+                        this.plugin.settings.modulePath = value;
+                        await this.plugin.saveSettings();
+                    })
+                new FolderSuggest(this.app, text.inputEl);
+            });
     }
 }
